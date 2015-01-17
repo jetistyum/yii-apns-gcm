@@ -98,6 +98,10 @@ class Sender {
         if($timeToLive != -1)
             $body .= '&' . Constants::$PARAM_TIME_TO_LIVE . '=' . $timeToLive;
 
+        $dryRun = $message->getDryRun();
+        if($dryRun === true)
+            $body .= '&' . Constants::$PARAM_DRY_RUN . '=true';
+
         foreach($message->getData() as $key => $value) {
             $body .= '&' . Constants::$PARAM_PAYLOAD_PREFIX . $key . '=' . urlencode($value);
         }

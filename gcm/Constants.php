@@ -28,6 +28,11 @@ final class Constants {
     public static $PARAM_DELAY_WHILE_IDLE = 'delay_while_idle';
 
     /**
+     * HTTP parameter for dry run.
+     */
+    public static $PARAM_DRY_RUN = 'dry_run';
+
+    /**
      * Prefix to HTTP parameter used to pass key-values in the message payload.
      */
     public static $PARAM_PAYLOAD_PREFIX = 'data.';
