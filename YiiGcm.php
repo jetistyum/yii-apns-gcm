@@ -69,7 +69,14 @@ class YiiGCM extends YiiApnsGcmBase
         try {
             // send a message
             $result = $this->getClient()->send($message, $token, $this->retryTimes);
-            $this->success = $result ? true : false;
+            $error = $result->getErrorCode();
+            if ($error){
+                $this->errors[] = $error;
+                $this->success = false;
+            }
+            else {
+                $this->success = $this->lastResult ? true : false;
+            }
         } catch (InvalidArgumentException $e) {
             $this->errors[] = $e->getMessage();
             // $deviceRegistrationId was null
