@@ -8,6 +8,8 @@ class YiiGCM extends YiiApnsGcmBase
 {
     public $apiKey;
 
+    public $result;
+
     private $_client = null;
 
     public function init()
@@ -69,6 +71,7 @@ class YiiGCM extends YiiApnsGcmBase
         try {
             // send a message
             $result = $this->getClient()->send($message, $token, $this->retryTimes);
+            $this->result = $result;
             $error = $result->getErrorCode();
             if ($error){
                 $this->errors[] = $error;
