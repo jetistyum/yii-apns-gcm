@@ -33,6 +33,7 @@ class Result {
     private $messageId;
     private $canonicalRegistrationId;
     private $errorCode;
+    private $registrationId;
 
     /**
      * Sets the message id
@@ -40,9 +41,8 @@ class Result {
      * @param string $messageId
      */
     public function setMessageId($messageId) {
-        $this->messageId = $messageId;
-    }
-
+    $this->messageId = $messageId;
+}
     /**
      * Gets the message id, if any
      *
@@ -60,6 +60,8 @@ class Result {
     public function setCanonicalRegistrationId($canonicalRegistrationId) {
         $this->canonicalRegistrationId = $canonicalRegistrationId;
     }
+
+
 
     /**
      * Gets the canonical registration id, if any

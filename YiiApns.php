@@ -126,7 +126,7 @@ class YiiApns extends YiiApnsGcmBase
 
         $this->getClient()->send();
 
-        $this->errors = $this->getClient()->getErrors();
+        $this->errors = $this->getClient()->getErrors(false);
         $this->success = count($this->errors) ? false : true;
 
         return $message;
@@ -170,10 +170,14 @@ class YiiApns extends YiiApnsGcmBase
 
         $this->getClient()->send();
 
-        $this->errors = $this->getClient()->getErrors();
-        $this->success = $this->getClient()->getErrors() ? true : false;
+        $this->errors = $this->getClient()->getErrors(false);
+        $this->success = $this->getClient()->getErrors(false) ? true : false;
 
         return $message;
+    }
+
+    public function getErrors(){
+        return $this->errors;
     }
 
     /**

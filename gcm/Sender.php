@@ -2,7 +2,8 @@
 
 namespace PHP_GCM;
 
-class Sender {
+class Sender
+{
 
     /**
      * Initial delay before first retry, without jitter.
@@ -21,7 +22,8 @@ class Sender {
      *
      * @param string $key API key obtained through the Google API Console.
      */
-    public function __construct($key) {
+    public function __construct($key)
+    {
         $this->key = $key;
     }
 
@@ -43,7 +45,8 @@ class Sender {
      * @throws InvalidRequestException if GCM didn't return a 200 or 503 status.
      * @throws \Exception if message could not be sent.
      */
-    public function send(Message $message, $registrationId, $retries) {
+    public function send(Message $message, $registrationId, $retries)
+    {
         $attempt = 0;
         $result = null;
         $backoff = Sender::$BACKOFF_INITIAL_DELAY;
@@ -53,15 +56,15 @@ class Sender {
 
             $result = $this->sendNoRetry($message, $registrationId);
             $tryAgain = $result == null && $attempt <= $retries;
-            if($tryAgain) {
+            if ($tryAgain) {
                 $sleepTime = $backoff / 2 + rand(0, $backoff);
                 sleep($sleepTime / 1000);
-                if(2 * $backoff < Sender::$MAX_BACKOFF_DELAY)
+                if (2 * $backoff < Sender::$MAX_BACKOFF_DELAY)
                     $backoff *= 2;
             }
         } while ($tryAgain);
 
-        if(is_null($result))
+        if (is_null($result))
             throw new \Exception('Could not send message after ' . $attempt . ' attempts');
 
         return $result;
@@ -80,34 +83,35 @@ class Sender {
      * @throws InvalidRequestException if GCM didn't returned a 200 or 503 status.
      * @throws \InvalidArgumentException if registrationId is {@literal null}.
      */
-    public function sendNoRetry(Message $message, $registrationId) {
-        if(empty($registrationId))
+    public function sendNoRetry(Message $message, $registrationId)
+    {
+        if (empty($registrationId))
             throw new \InvalidArgumentException('registrationId can\'t be empty');
 
         $body = Constants::$PARAM_REGISTRATION_ID . '=' . $registrationId;
 
         $delayWhileIdle = $message->getDelayWhileIdle();
-        if(!is_null($delayWhileIdle))
+        if (!is_null($delayWhileIdle))
             $body .= '&' . Constants::$PARAM_DELAY_WHILE_IDLE . '=' . ($delayWhileIdle ? '1' : '0');
 
         $collapseKey = $message->getCollapseKey();
-        if($collapseKey != '')
+        if ($collapseKey != '')
             $body .= '&' . Constants::$PARAM_COLLAPSE_KEY . '=' . $collapseKey;
 
         $timeToLive = $message->getTimeToLive();
-        if($timeToLive != -1)
+        if ($timeToLive != -1)
             $body .= '&' . Constants::$PARAM_TIME_TO_LIVE . '=' . $timeToLive;
 
         $dryRun = $message->getDryRun();
-        if($dryRun === true)
+        if ($dryRun === true)
             $body .= '&' . Constants::$PARAM_DRY_RUN . '=true';
 
-        foreach($message->getData() as $key => $value) {
+        foreach ($message->getData() as $key => $value) {
             $body .= '&' . Constants::$PARAM_PAYLOAD_PREFIX . $key . '=' . urlencode($value);
         }
 
         $headers = array('Content-Type: application/x-www-form-urlencoded;charset=UTF-8',
-                            'Authorization: key=' . $this->key);
+            'Authorization: key=' . $this->key);
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, Constants::$GCM_SEND_ENDPOINT);
@@ -119,32 +123,32 @@ class Sender {
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if($status == 503)
+        if ($status == 503)
             return null;
-        if($status != 200)
+        if ($status != 200)
             throw new InvalidRequestException($status);
-        if($response == '')
+        if ($response == '')
             throw new \Exception('Received empty response from GCM service.');
 
         $lines = explode("\n", $response);
         $responseParts = explode('=', $lines[0]);
         $token = $responseParts[0];
         $value = $responseParts[1];
-        if($token == Constants::$TOKEN_MESSAGE_ID) {
+        if ($token == Constants::$TOKEN_MESSAGE_ID) {
             $result = new Result();
             $result->setMessageId($value);
 
-            if(isset($lines[1]) && $lines[1] != '') {
+            if (isset($lines[1]) && $lines[1] != '') {
                 $responseParts = explode('=', $lines[1]);
                 $token = $responseParts[0];
                 $value = $responseParts[1];
 
-                if($token == Constants::$TOKEN_CANONICAL_REG_ID)
+                if ($token == Constants::$TOKEN_CANONICAL_REG_ID)
                     $result->setCanonicalRegistrationId($value);
             }
 
             return $result;
-        } else if($token == Constants::$TOKEN_ERROR) {
+        } else if ($token == Constants::$TOKEN_ERROR) {
             $result = new Result();
             $result->setErrorCode($value);
             return $result;
@@ -173,41 +177,47 @@ class Sender {
      * @throws InvalidRequestException if GCM didn't returned a 200 or 503 status.
      * @throws \Exception if message could not be sent.
      */
-    public function sendMulti(Message $message, array $registrationIds, $retries) {
-        $attempt = 0;
-        $multicastResult = null;
+    public function sendMulti(Message $message, array $ids, $retries)
+    {
+
+
         $backoff = Sender::$BACKOFF_INITIAL_DELAY;
 
-        // results by registration id, it will be updated after each attempt
-        // to send the messages
+        $rcpts = array_chunk($ids, 1000);
         $results = array();
-        $unsentRegIds = $registrationIds;
-
         $multicastIds = array();
+        foreach ($rcpts as $registrationIds) {
+            // results by registration id, it will be updated after each attempt
+            // to send the messages
+            $unsentRegIds = $registrationIds;
 
-        do {
-            $attempt++;
+            $attempt = 0;
+            $multicastResult = null;
 
-            $multicastResult = $this->sendNoRetryMulti($message, $unsentRegIds);
-            $multicastId = $multicastResult->getMulticastId();
-            $multicastIds[] = $multicastId;
-            $unsentRegIds = $this->updateStatus($unsentRegIds, $results, $multicastResult);
+            do {
+                $attempt++;
 
-            $tryAgain = count($unsentRegIds) > 0 && $attempt <= $retries;
-            if($tryAgain) {
-                $sleepTime = $backoff / 2 + rand(0, $backoff);
-                sleep($sleepTime / 1000);
-                if(2 * $backoff < Sender::$MAX_BACKOFF_DELAY)
-                    $backoff *= 2;
-            }
-        } while ($tryAgain);
+                $multicastResult = $this->sendNoRetryMulti($message, $unsentRegIds);
+                $multicastId = $multicastResult->getMulticastId();
+                $multicastIds[] = $multicastId;
+                $unsentRegIds = $this->updateStatus($unsentRegIds, $results, $multicastResult);
+
+                $tryAgain = count($unsentRegIds) > 0 && $attempt <= $retries;
+                if ($tryAgain) {
+                    $sleepTime = $backoff / 2 + rand(0, $backoff);
+                    sleep($sleepTime / 1000);
+                    if (2 * $backoff < Sender::$MAX_BACKOFF_DELAY)
+                        $backoff *= 2;
+                }
+            } while ($tryAgain);
+        }
 
         $success = $failure = $canonicalIds = 0;
-        foreach($results as $result) {
-            if(!is_null($result->getMessageId())) {
+        foreach ($results as $result) {
+            if (!is_null($result->getMessageId())) {
                 $success++;
 
-                if(!is_null($result->getCanonicalRegistrationId()))
+                if (!is_null($result->getCanonicalRegistrationId()))
                     $canonicalIds++;
             } else {
                 $failure++;
@@ -218,8 +228,12 @@ class Sender {
         $builder = new MulticastResult($success, $failure, $canonicalIds, $multicastId, $multicastIds);
 
         // add results, in the same order as the input
-        foreach($registrationIds as $registrationId) {
+   /*     foreach ($registrationIds as $registrationId) {
             $builder->addResult($results[$registrationId]);
+        }*/
+
+        foreach($results as $registrationId=> $result) {
+            $builder->addResult($result);
         }
 
         return $builder;
@@ -237,24 +251,25 @@ class Sender {
      * @throws InvalidRequestException if GCM didn't returned a 200 status.
      * @throws \Exception if message could not be sent or received.
      */
-    public function sendNoRetryMulti(Message $message, array $registrationIds) {
-        if(is_null($registrationIds) || count($registrationIds) == 0)
+    public function sendNoRetryMulti(Message $message, array $registrationIds)
+    {
+        if (is_null($registrationIds) || count($registrationIds) == 0)
             throw new \InvalidArgumentException('registrationIds cannot be null or empty');
 
         $request = array();
 
-        if($message->getTimeToLive() != -1)
+        if ($message->getTimeToLive() != -1)
             $request[Constants::$PARAM_TIME_TO_LIVE] = $message->getTimeToLive();
 
-        if($message->getCollapseKey() != '')
+        if ($message->getCollapseKey() != '')
             $request[Constants::$PARAM_COLLAPSE_KEY] = $message->getCollapseKey();
 
-        if($message->getDelayWhileIdle() != '')
+        if ($message->getDelayWhileIdle() != '')
             $request[Constants::$PARAM_DELAY_WHILE_IDLE] = $message->getDelayWhileIdle();
 
         $request[Constants::$JSON_REGISTRATION_IDS] = $registrationIds;
 
-        if(!is_null($message->getData()) && count($message->getData()) > 0)
+        if (!is_null($message->getData()) && count($message->getData()) > 0)
             $request[Constants::$JSON_PAYLOAD] = $message->getData();
 
         $request = json_encode($request);
@@ -272,10 +287,10 @@ class Sender {
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if($status != 200)
+        if ($status != 200)
             throw new InvalidRequestException($status, $response);
 
-        $response = json_decode($response, true);
+        $response = json_decode($response, true, 512, JSON_BIGINT_AS_STRING);
         $success = $response[Constants::$JSON_SUCCESS];
         $failure = $response[Constants::$JSON_FAILURE];
         $canonicalIds = $response[Constants::$JSON_CANONICAL_IDS];
@@ -283,12 +298,12 @@ class Sender {
 
         $multicastResult = new MulticastResult($success, $failure, $canonicalIds, $multicastId);
 
-        if(isset($response[Constants::$JSON_RESULTS])){
+        if (isset($response[Constants::$JSON_RESULTS])) {
             $individualResults = $response[Constants::$JSON_RESULTS];
 
-            foreach($individualResults as $singleResult) {
+            foreach ($individualResults as $i => $singleResult) {
                 $messageId = isset($singleResult[Constants::$JSON_MESSAGE_ID]) ? $singleResult[Constants::$JSON_MESSAGE_ID] : null;
-                $canonicalRegId = isset($singleResult[Constants::$TOKEN_CANONICAL_REG_ID]) ? $singleResult[Constants::$TOKEN_CANONICAL_REG_ID] : null;
+                $canonicalRegId = isset($singleResult[Constants::$TOKEN_CANONICAL_REG_ID]) ? $singleResult[Constants::$TOKEN_CANONICAL_REG_ID] : $registrationIds[$i];
                 $error = isset($singleResult[Constants::$JSON_ERROR]) ? $singleResult[Constants::$JSON_ERROR] : null;
 
                 $result = new Result();
@@ -313,9 +328,10 @@ class Sender {
      *
      * @return array updated version of devices that should be retried.
      */
-    private function updateStatus($unsentRegIds, &$allResults, MulticastResult $multicastResult) {
+    private function updateStatus($unsentRegIds, &$allResults, MulticastResult $multicastResult)
+    {
         $results = $multicastResult->getResults();
-        if(count($results) != count($unsentRegIds)) {
+        if (count($results) != count($unsentRegIds)) {
             // should never happen, unless there is a flaw in the algorithm
             throw new \RuntimeException('Internal error: sizes do not match. currentResults: ' . $results .
                 '; unsentRegIds: ' + $unsentRegIds);
@@ -328,7 +344,7 @@ class Sender {
             $allResults[$regId] = $result;
             $error = $result->getErrorCode();
 
-            if(!is_null($error) && $error == Constants::$ERROR_UNAVAILABLE)
+            if (!is_null($error) && $error == Constants::$ERROR_UNAVAILABLE)
                 $newUnsentRegIds[] = $regId;
         }
 

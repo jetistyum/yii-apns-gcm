@@ -106,7 +106,9 @@ class ApnsPHP_Push extends ApnsPHP_Abstract
 					$nMessageID,
 					$message->getExpiry()
 				),
-				'ERRORS' => array()
+				'ERRORS' => array(),
+				'TOKEN'=>$message->getRecipient($i),
+
 			);
 		}
 	}
@@ -350,6 +352,7 @@ class ApnsPHP_Push extends ApnsPHP_Abstract
 				unset($this->_aMessageQueue[$k]);
 			} else if ($k == $aErrorMessage['identifier']) {
 				$aMessage['ERRORS'][] = $aErrorMessage;
+//				unset($this->_aMessageQueue[$k]);
 			} else {
 				break;
 			}

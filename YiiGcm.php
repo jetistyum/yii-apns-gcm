@@ -8,7 +8,7 @@ class YiiGCM extends YiiApnsGcmBase
 {
     public $apiKey;
 
-    public $result;
+    private $result;
 
     private $_client = null;
 
@@ -30,6 +30,10 @@ class YiiGCM extends YiiApnsGcmBase
         }
 
         return $this->_client;
+    }
+
+    public function getResult(){
+        return $this->result;
     }
 
     /**
@@ -143,6 +147,7 @@ class YiiGCM extends YiiApnsGcmBase
         try {
             // send a message
             $result = $this->getClient()->sendMulti($message, $tokens, $this->retryTimes);
+            $this->result = $result;
 
             $this->success = $result->getSuccess();;
         } catch (InvalidArgumentException $e) {
